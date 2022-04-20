@@ -222,3 +222,113 @@ def get_curve(img, leftx, rightx):
     return (left_curverad, right_curverad, center)
 
 # ---------------------------------------------------------------------------#
+
+
+
+# ----------------------- Pipeline in Debugging Mode-------------------------#
+# ---------------------------------------------------------------------------#
+def pipeline_deb_mode(img):
+    img_copy = img
+    filters = []
+    edge_output = Edge_Detection(img)  ## Output of Canny Edge Detection + Filtering
+    warped = perspective_transform(edge_output)  ## Output of Perspective Transform
+    sliding_out, curves, _, _ = sliding_window(warped, draw_windows=False)  ## Output of Sliding Window
+
+    curve_radius = get_curve(img, curves[0], curves[1])  ## Return The radius of right and left curves
+
+    lane_curve = np.mean(
+        [curve_radius[0], curve_radius[1]])  ## Calculating the mean value of the right and left curves radius
+    img = draw_lanes(img, curves[0], curves[1])
+
+    ####
+
+    font = cv2.FONT_HERSHEY_TRIPLEX
+    fontColor = (255, 255, 255)
+    fontSize = 1.3
+    cv2.putText(img, 'Radius of Curvature: {:.0f} m'.format(lane_curve), (30, 100), font, fontSize, fontColor, 2)
+    cv2.putText(img, 'Vehicle is {:.4f} m of the center'.format(curve_radius[2]), (30, 150), font, fontSize, fontColor,
+                2)
+
+    ###
+    src = np.float32([(0.43, 0.65), (0.1, 1), (1, 1), (0.58, 0.65)])
+    img_size = np.float32([(img.shape[1], img.shape[0])])
+    src = src * img_size
+    src = src.reshape((-1, 1, 2)).astype(np.int32)
+
+    cv2.polylines(img_copy, [src], True, color=(255, 0, 0), thickness=4)
+    ###
+
+    filters.append(sliding_out)
+    filters.append(warped)
+    filters.append(img_copy)
+    filters.append(edge_output)
+
+    return show_debugging(img, filters)
+
+# ---------------------------------------------------------------------------#
+
+
+# ----------------------- Pipeline in Normal Mode ----------------------------#
+# ----------------------------------------------------------------------------#
+
+def pipeline_normal_mode(img):
+    edge_output = Edge_Detection(img)  ## Output of Canny Edge Detection + Filtering
+    warped = perspective_transform(edge_output)  ## Output of Perspective Transform
+    _, curves, _, _ = sliding_window(warped, draw_windows=False)  ## Output of Sliding Window
+    curve_radius = get_curve(img, curves[0], curves[1])  ## Return The radius of right and left curves
+    lane_curve = np.mean(
+        [curve_radius[0], curve_radius[1]])  ## Calculating the mean value of the right and left curves radius
+    img = draw_lanes(img, curves[0], curves[1])  ## Draw the Lane
+
+    font = cv2.FONT_HERSHEY_TRIPLEX
+    fontColor = (255, 255, 255)
+    fontSize = 1.3
+    cv2.putText(img, 'Radius of Curvature: {:.0f} m'.format(lane_curve), (30, 100), font, fontSize, fontColor, 2)
+    cv2.putText(img, 'Vehicle is {:.4f} m of the center'.format(curve_radius[2]), (30, 150), font, fontSize, fontColor,
+                2)
+
+    return img
+
+# ---------------------------------------------------------------------------#
+
+
+# ------------ Function That Show Stacked Windows ----------------------------#
+# ----------------------------------------------------------------------------#
+
+def show_debugging(img, filters):
+    font = cv2.FONT_HERSHEY_TRIPLEX
+    fontColor = (255, 255, 255)
+    fontSize = 0.7
+    # cv2.putText(img, 'Radius of Curvature: {:.0f} m'.format(lane_curve), (30, 100), font, fontSize, fontColor, 2)
+    # cv2.putText(img, 'Vehicle is {:.4f} m of the center'.format(curve_radius[2]), (30, 150), font, fontSize, fontColor, 2)
+
+    for i, filt in enumerate(filters):
+        if (len(filt.shape) < 3):
+            filters[i] = cv2.cvtColor(filt, cv2.COLOR_GRAY2RGB)
+
+    if len(filters) == 4:
+        img_out = np.zeros((960, 1624, 3), dtype=np.uint8)
+        img_out[0:576, 0:1024, 0:3] = cv2.resize(img, (1024, 576))  ## Real Image
+        # ----------------------------------------
+        img_out[576:, 0:512, 0:3] = cv2.resize(filters[0], (512, 384))
+        img_out[576:, 512:1024, 0:3] = cv2.resize(filters[1], (512, 384))
+        img_out[0:480, 1024:, 0:3] = cv2.resize(filters[2], (600, 480))
+        img_out[480:, 1024:, 0:3] = cv2.resize(filters[3], (600, 480))
+
+        cv2.putText(img_out, 'Sliding Window Result', (10, 585), font, fontSize, fontColor, 2)
+        cv2.putText(img_out, 'Bird Eye View ', (530, 585), font, fontSize, fontColor, 2)
+        cv2.putText(img_out, 'Edge Detection', (1035, 490), font, fontSize, fontColor, 2)
+
+    if len(filters) == 5:
+        img_out = np.zeros((864, 1536, 3), dtype=np.uint8)
+        img_out[0:576, 0:1024, 0:3] = cv2.resize(img, (1024, 576))
+        # ----------------------------------------
+        img_out[576:, 0:512, 0:3] = cv2.resize(filters[0], (512, 288))
+        img_out[576:, 512:1024, 0:3] = cv2.resize(filters[1], (512, 288))
+        img_out[576:, 1024:, 0:3] = cv2.resize(filters[2], (512, 288))
+        img_out[:288, 1024:, 0:3] = cv2.resize(filters[3], (512, 288))
+        img_out[288:576, 1024:, 0:3] = cv2.resize(filters[4], (512, 288))
+
+    return img_out
+
+# ---------------------------------------------------------------------------#
