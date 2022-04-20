@@ -171,3 +171,54 @@ def sliding_window(img, nwindows=9, margin=150, minpix = 1, draw_windows=True):
     
     return out_img, (left_fitx, right_fitx), (left_fit_, right_fit_), ploty
 
+# ------------------------- Draw Lanes----------------------------------------#
+# ---------------------------------------------------------------------------#
+
+def draw_lanes(img, left_fit, right_fit):
+    ploty = np.linspace(0, img.shape[0] - 1, img.shape[0])
+    color_img = np.zeros_like(img)
+
+    left = np.array([np.transpose(np.vstack([left_fit, ploty]))])
+    right = np.array([np.flipud(np.transpose(np.vstack([right_fit, ploty])))])
+    points = np.hstack((left, right))
+
+    cv2.fillPoly(color_img, np.int_(points), (34, 139, 34))
+    inv_perspective = inv_perspective_transform(color_img)
+    inv_perspective = cv2.addWeighted(img, 1, inv_perspective, 0.7, 0)
+    return inv_perspective
+
+# ---------------------------------------------------------------------------#
+
+
+# ------------------------- Get Curve----------------------------------------#
+# ---------------------------------------------------------------------------#
+def get_curve(img, leftx, rightx):
+    # Generate y values for plotting
+    ploty = np.linspace(0, img.shape[0] - 1, img.shape[0])
+    y_eval = np.max(ploty)
+    # calculate meters per pixel (field of view in meters / image width)
+    ym_per_pix = 30.5 / 720  # meters per pixel in y dimension
+    xm_per_pix = 3.7 / 720  # meters per pixel in x dimension
+
+    # Fit new polynomials to x,y in world space
+    left_fit_cr = np.polyfit(ploty * ym_per_pix, leftx * xm_per_pix, 2)  ## Scaling for real world
+    right_fit_cr = np.polyfit(ploty * ym_per_pix, rightx * xm_per_pix, 2)
+    # Calculate the new radii of curvature
+    left_curverad = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
+        2 * left_fit_cr[0])
+    right_curverad = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(
+        2 * right_fit_cr[0])
+
+    # calculate car position
+    car_pos = img.shape[1] / 2
+
+    # calculate lane center
+    l_fit_x_int = left_fit_cr[0] * img.shape[0] ** 2 + left_fit_cr[1] * img.shape[0] + left_fit_cr[2]
+    r_fit_x_int = right_fit_cr[0] * img.shape[0] ** 2 + right_fit_cr[1] * img.shape[0] + right_fit_cr[2]
+    lane_center_position = (r_fit_x_int + l_fit_x_int) / 2
+
+    center = (car_pos - lane_center_position) * xm_per_pix / 10
+    # Now our radius of curvature is in meters
+    return (left_curverad, right_curverad, center)
+
+# ---------------------------------------------------------------------------#
